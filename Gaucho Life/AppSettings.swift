@@ -1,5 +1,5 @@
 //
-//  LifeModel.swift
+//  AppDelegate.swift
 //  Gaucho Life
 //
 //  Created by Mike Piatek-Jimenez on 9/10/18.
@@ -32,32 +32,25 @@
 //
 
 import Foundation
-import Cocoa
+import LifeCore
 
-public class LifeModel {
+/// The app's single source of truth for user settings. Persists to `UserDefaults` and
+/// broadcasts changes so the simulation can apply them live.
+final class AppSettings {
+    static let shared = AppSettings()
+    static let didChange = Notification.Name("AppSettingsDidChange")
 
-    var blockSize: CGFloat = 24
-    var board: LifeBoard?
-    
-    private var iterationsSinceReset: Int = 0
-    private let maxIterationsSinceReset: Int = 500
-        
-    public func reset(boardWidth: UInt, boardHeight: UInt) {
-        board = LifeBoard(width: boardWidth, height: boardHeight)
-        board?.increment()
+    private let store = LifeSettingsStore(defaults: .standard)
 
-        iterationsSinceReset = 0
-    }
-    
-    public func increment() {
-        board?.increment()
-        iterationsSinceReset += 1
-        
-        if iterationsSinceReset > maxIterationsSinceReset {
-            guard let board else { return }
-
-            reset(boardWidth: board.width, boardHeight: board.height)
+    var settings: LifeSettings {
+        didSet {
+            guard settings != oldValue else { return }
+            store.save(settings)
+            NotificationCenter.default.post(name: Self.didChange, object: self)
         }
     }
-    
+
+    private init() {
+        settings = store.load()
+    }
 }

@@ -32,29 +32,86 @@
 //
 
 import Cocoa
+import LifeCore
 
-public class LifeView: NSView, LifeDrawing {
-    var blockSize: CGFloat = 24 {
-        didSet {
-            setNeedsDisplay(self.bounds)
+protocol LifeViewDelegate: AnyObject {
+    func lifeView(_ view: LifeView, setCellAtX x: Int, y: Int, alive: Bool)
+}
+
+/// Draws a board and lets the user paint cells with the mouse.
+public class LifeView: NSView {
+
+    weak var delegate: LifeViewDelegate?
+
+    private var board: LifeBoard?
+    private var palette: LifePalette = .rainbow
+    private var cellSize: CGFloat = 24
+
+    /// The state being painted during the current drag, decided by the cell under the initial click.
+    private var paintingAlive: Bool?
+
+    func display(board: LifeBoard?, palette: LifePalette, cellSize: Double) {
+        self.board = board
+        self.palette = palette
+        self.cellSize = CGFloat(cellSize)
+        needsDisplay = true
+    }
+
+    public override var isOpaque: Bool { true }
+    public override var acceptsFirstResponder: Bool { true }
+
+    /// Let a click on an inactive window paint straight away instead of only activating the window.
+    public override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    public override func draw(_ dirtyRect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        if let board {
+            LifeRenderer.draw(board, palette: palette, cellSize: cellSize, in: context, bounds: bounds)
+        } else {
+            context.setFillColor(LifeRenderer.backgroundColor)
+            context.fill(bounds)
         }
     }
-    
-    var board: LifeBoard? {
-        didSet {
-            setNeedsDisplay(self.bounds)
-        }
-    }
-    
-    func update(from model: LifeModel) {
-        board = model.board
-        blockSize = model.blockSize
+
+    // MARK: Mouse painting
+
+    public override func mouseDown(with event: NSEvent) {
+        guard let board, let cell = cell(for: event) else { return }
+        let alive = !board[cell.x, cell.y]
+        paintingAlive = alive
+        delegate?.lifeView(self, setCellAtX: cell.x, y: cell.y, alive: alive)
     }
 
-    override public func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        
-        guard let board else { return }
-        draw(board: board, blockSize: blockSize, in: bounds)
+    public override func mouseDragged(with event: NSEvent) {
+        guard let board, let paintingAlive, let cell = cell(for: event), board[cell.x, cell.y] != paintingAlive else { return }
+        delegate?.lifeView(self, setCellAtX: cell.x, y: cell.y, alive: paintingAlive)
+    }
+
+    public override func mouseUp(with event: NSEvent) {
+        paintingAlive = nil
+    }
+
+    private func cell(for event: NSEvent) -> (x: Int, y: Int)? {
+        guard let board else { return nil }
+        let point = convert(event.locationInWindow, from: nil)
+        return LifeLayout(board: board, cellSize: cellSize, bounds: bounds).cell(at: point)
+    }
+
+    // MARK: Keyboard
+
+    /// The Simulation menu's key equivalents normally handle these first; this covers the case
+    /// where the key reaches the view directly.
+    public override func keyDown(with event: NSEvent) {
+        guard let characters = event.charactersIgnoringModifiers, let scalar = characters.unicodeScalars.first else {
+            return super.keyDown(with: event)
+        }
+        switch Int(scalar.value) {
+        case 0x20:
+            NSApp.sendAction(Selector(("togglePause:")), to: nil, from: self)
+        case NSRightArrowFunctionKey:
+            NSApp.sendAction(Selector(("stepForward:")), to: nil, from: self)
+        default:
+            super.keyDown(with: event)
+        }
     }
 }

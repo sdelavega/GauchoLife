@@ -32,13 +32,52 @@
 //
 
 import Cocoa
+import LifeSettingsUI
 
-@NSApplicationMain
+@main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    func applicationDidFinishLaunching(_ aNotification: Notification) {}
+    private var preferencesWindow: NSWindow?
 
-    func applicationWillTerminate(_ aNotification: Notification) {}
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
+        if let window = NSApplication.shared.windows.first {
+            window.contentMinSize = NSSize(width: 240, height: 180)
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+
+    @IBAction func showPreferences(_ sender: Any?) {
+        if preferencesWindow == nil {
+            preferencesWindow = makePreferencesWindow()
+        }
+        preferencesWindow?.makeKeyAndOrderFront(sender)
+    }
+
+    private func makePreferencesWindow() -> NSWindow {
+        let form = LifeSettingsView(settings: AppSettings.shared.settings)
+        form.onChange = { AppSettings.shared.settings = $0 }
+        form.translatesAutoresizingMaskIntoConstraints = false
+
+        let content = NSView()
+        content.addSubview(form)
+        NSLayoutConstraint.activate([
+            form.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            form.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            form.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
+            form.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
+        ])
+
+        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Gaucho Life Preferences"
+        window.isReleasedWhenClosed = false
+        window.contentView = content
+        window.setContentSize(content.fittingSize)
+        window.center()
+        window.setFrameAutosaveName("preferencesWindow")
+        return window
+    }
 }
-
